@@ -56,30 +56,40 @@ func (s *App) StartService(w http.ResponseWriter, r *http.Request) {
 	apiResponse(w, 0, "ok", map[string]string{"service": service, "status": "started"})
 }
 
-// 创建配置
+// CreateConfig 创建配置
 func (s *App) CreateConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	service := r.FormValue("service")
-	configContent := r.FormValue("config")
 
-	if err := validator.ValidateServiceName(service); err != nil {
-		logger.Error(ctx, "CreateConfig validation failed", "error", err, "service", service)
+	var configRequest struct {
+		Service string `json:"service"`
+		Config  string `json:"config"`
+	}
+
+	defer r.Body.Close()
+	if err := json.NewDecoder(r.Body).Decode(&configRequest); err != nil {
+		logger.Error(ctx, "Failed to decode config request", "error", err)
+		apiResponse(w, -1, "invalid request format", err.Error())
+		return
+	}
+
+	if err := validator.ValidateServiceName(configRequest.Service); err != nil {
+		logger.Error(ctx, "CreateConfig validation failed", "error", err, "service", configRequest.Service)
 		apiResponse(w, -1, "validation failed", err.Error())
 		return
 	}
 
-	if configContent == "" {
-		logger.Error(ctx, "Empty config content", "service", service)
+	if configRequest.Config == "" {
+		logger.Error(ctx, "Empty config content", "service", configRequest.Service)
 		apiResponse(w, -1, "validation failed", "config content cannot be empty")
 		return
 	}
 
-	filePath := fmt.Sprintf("/etc/systemd/system/%s.service", service)
-	logger.Info(ctx, "Creating config file", "service", service, "file", filePath)
+	filePath := fmt.Sprintf("/etc/systemd/system/%s.service", configRequest.Service)
+	logger.Info(ctx, "Creating config file", "service", configRequest.Service, "file", filePath)
 
-	err := os.WriteFile(filePath, []byte(configContent), 0644)
+	err := os.WriteFile(filePath, []byte(configRequest.Config), 0644)
 	if err != nil {
-		logger.Error(ctx, "Failed to write config file", "error", err, "service", service, "file", filePath)
+		logger.Error(ctx, "Failed to write config file", "error", err, "service", configRequest.Service, "file", filePath)
 		apiResponse(w, -1, "failed", err.Error())
 		return
 	}
@@ -93,26 +103,29 @@ func (s *App) CreateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiResponse(w, 0, "ok", map[string]string{"service": service, "config_file": filePath})
+	apiResponse(w, 0, "ok", map[string]string{
+		"service":     configRequest.Service,
+		"config_file": filePath,
+	})
 }
 
-// 删除配置
+// DeleteConfig 删除配置
 func (s *App) DeleteConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	service := r.URL.Query().Get("service")
+	serviceName := getServiceName(r)
 
-	if err := validator.ValidateServiceName(service); err != nil {
-		logger.Error(ctx, "DeleteConfig validation failed", "error", err, "service", service)
+	if err := validator.ValidateServiceName(serviceName); err != nil {
+		logger.Error(ctx, "DeleteConfig validation failed", "error", err, "service", serviceName)
 		apiResponse(w, -1, "validation failed", err.Error())
 		return
 	}
 
-	filePath := fmt.Sprintf("/etc/systemd/system/%s.service", service)
-	logger.Info(ctx, "Deleting config file", "service", service, "file", filePath)
+	filePath := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
+	logger.Info(ctx, "Deleting config file", "service", serviceName, "file", filePath)
 
 	err := os.Remove(filePath)
 	if err != nil {
-		logger.Error(ctx, "Failed to delete config file", "error", err, "service", service, "file", filePath)
+		logger.Error(ctx, "Failed to delete config file", "error", err, "service", serviceName, "file", filePath)
 		apiResponse(w, -1, "failed", err.Error())
 		return
 	}
@@ -126,7 +139,10 @@ func (s *App) DeleteConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiResponse(w, 0, "ok", map[string]string{"service": service, "deleted_file": filePath})
+	apiResponse(w, 0, "ok", map[string]string{
+		"service":      serviceName,
+		"deleted_file": filePath,
+	})
 }
 
 // 获取服务状态

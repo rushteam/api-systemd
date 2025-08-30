@@ -28,37 +28,23 @@
 - **健康检查**: 内置系统健康状态检查
 - **性能分析**: 内置 pprof 调试工具
 
-## 📡 API 接口
+## 📡 RESTful API 接口
 
-### 服务管理 (RESTful)
+### 服务管理
 ```
-POST   /services/deploy           # 部署服务
-GET    /services/start            # 启动服务 (?service=name)
-GET    /services/stop             # 停止服务 (?service=name)
-GET    /services/restart          # 重启服务 (?service=name)
-DELETE /services/remove           # 移除服务 (?service=name)
-GET    /services/status           # 获取服务状态 (?service=name)
-GET    /services/logs             # 获取服务日志 (?service=name&lines=100)
-
-# 或使用路径参数
-GET    /services/{serviceName}/status    # 获取指定服务状态
-GET    /services/{serviceName}/logs      # 获取指定服务日志
-POST   /services/{serviceName}/start     # 启动指定服务
-POST   /services/{serviceName}/stop      # 停止指定服务
-POST   /services/{serviceName}/restart   # 重启指定服务
-DELETE /services/{serviceName}           # 删除指定服务
-```
-
-### API 版本化 (推荐)
-```
-POST   /api/v1/services/deploy           # v1 版本API
-GET    /api/v1/services/{serviceName}/status
+POST   /services/deploy                   # 部署新服务
+GET    /services/{serviceName}/status     # 获取服务状态
+GET    /services/{serviceName}/logs       # 获取服务日志 (?lines=100)
+POST   /services/{serviceName}/start      # 启动服务
+POST   /services/{serviceName}/stop       # 停止服务
+POST   /services/{serviceName}/restart    # 重启服务
+DELETE /services/{serviceName}            # 删除服务
 ```
 
 ### 配置管理
 ```
-POST   /configs/create     # 创建配置文件
-DELETE /configs/delete     # 删除配置文件
+POST   /configs/                         # 创建配置文件
+DELETE /configs/{serviceName}            # 删除指定服务的配置文件
 ```
 
 ### 系统监控
@@ -269,7 +255,9 @@ curl http://localhost:8080/health
 make health
 ```
 
-### 部署服务示例
+### API 使用示例
+
+#### 部署服务
 ```bash
 curl -X POST http://localhost:8080/services/deploy \
   -H "Content-Type: application/json" \
@@ -279,6 +267,41 @@ curl -X POST http://localhost:8080/services/deploy \
     "package_url": "https://example.com/app.tar.gz", 
     "start_command": "app"
   }'
+```
+
+#### 管理服务
+```bash
+# 启动服务
+curl -X POST http://localhost:8080/services/test-app/start
+
+# 获取服务状态
+curl http://localhost:8080/services/test-app/status
+
+# 获取服务日志（最近100行）
+curl http://localhost:8080/services/test-app/logs?lines=100
+
+# 重启服务
+curl -X POST http://localhost:8080/services/test-app/restart
+
+# 停止服务
+curl -X POST http://localhost:8080/services/test-app/stop
+
+# 删除服务
+curl -X DELETE http://localhost:8080/services/test-app
+```
+
+#### 配置管理
+```bash
+# 创建配置
+curl -X POST http://localhost:8080/configs/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service": "test-app",
+    "config": "[Unit]\nDescription=Test App\n[Service]\nExecStart=/opt/test-app/app\n[Install]\nWantedBy=multi-user.target"
+  }'
+
+# 删除配置
+curl -X DELETE http://localhost:8080/configs/test-app
 ```
 
 ## 🔧 开发

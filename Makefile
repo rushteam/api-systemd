@@ -36,6 +36,11 @@ help:
 	@echo "  status     - 查看服务状态"
 	@echo "  logs       - 查看服务日志"
 	@echo "  health     - 健康检查"
+	@echo ""
+	@echo "新的 RESTful API:"
+	@echo "  POST /services/deploy              - 部署服务"
+	@echo "  GET  /services/{name}/status       - 获取状态"
+	@echo "  POST /services/{name}/start        - 启动服务"
 
 # 构建二进制文件
 build:

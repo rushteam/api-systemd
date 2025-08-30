@@ -34,50 +34,28 @@ func New() *chi.Mux {
 
 // setupRoutes 设置所有路由
 func setupRoutes(r *chi.Mux, app *app.App) {
-	// API v1 路由组
-	r.Route("/api/v1", func(r chi.Router) {
-		// 服务管理路由组
-		r.Route("/services", func(r chi.Router) {
-			r.Post("/deploy", app.Deploy)
-			r.Get("/start", app.StartService)
-			r.Get("/stop", app.Stop)
-			r.Get("/restart", app.Restart)
-			r.Delete("/remove", app.Remove)
+	// 服务管理路由组
+	r.Route("/services", func(r chi.Router) {
+		// 全局服务操作
+		r.Post("/deploy", app.Deploy)
+
+		// 针对特定服务的操作
+		r.Route("/{serviceName}", func(r chi.Router) {
 			r.Get("/status", app.GetStatus)
 			r.Get("/logs", app.GetLogs)
-
-			// 支持带参数的路由
-			r.Route("/{serviceName}", func(r chi.Router) {
-				r.Get("/status", app.GetStatus)
-				r.Get("/logs", app.GetLogs)
-				r.Post("/start", app.StartService)
-				r.Post("/stop", app.Stop)
-				r.Post("/restart", app.Restart)
-				r.Delete("/", app.Remove)
-			})
-		})
-
-		// 配置管理路由组
-		r.Route("/configs", func(r chi.Router) {
-			r.Post("/create", app.CreateConfig)
-			r.Delete("/delete", app.DeleteConfig)
+			r.Post("/start", app.StartService)
+			r.Post("/stop", app.Stop)
+			r.Post("/restart", app.Restart)
+			r.Delete("/", app.Remove)
 		})
 	})
 
-	// 兼容旧版本路由（无版本前缀）
-	r.Route("/services", func(r chi.Router) {
-		r.Post("/deploy", app.Deploy)
-		r.Get("/start", app.StartService)
-		r.Get("/stop", app.Stop)
-		r.Get("/restart", app.Restart)
-		r.Delete("/remove", app.Remove)
-		r.Get("/status", app.GetStatus)
-		r.Get("/logs", app.GetLogs)
-	})
-
+	// 配置管理路由组
 	r.Route("/configs", func(r chi.Router) {
-		r.Post("/create", app.CreateConfig)
-		r.Delete("/delete", app.DeleteConfig)
+		r.Post("/", app.CreateConfig)
+		r.Route("/{serviceName}", func(r chi.Router) {
+			r.Delete("/", app.DeleteConfig)
+		})
 	})
 
 	// 健康检查和系统信息
