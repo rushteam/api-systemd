@@ -41,6 +41,9 @@ func New(cfg *config.Config) *chi.Mux {
 func setupRoutes(r *chi.Mux, app *app.App) {
 	// 服务管理路由组
 	r.Route("/services", func(r chi.Router) {
+		// 获取服务列表
+		r.Get("/", app.ListServices)
+
 		// 全局服务操作
 		r.Post("/deploy", app.Deploy)
 

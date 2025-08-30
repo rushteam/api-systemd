@@ -326,3 +326,22 @@ func (s *App) Deploy(w http.ResponseWriter, r *http.Request) {
 		"status":  "deployed",
 	})
 }
+
+// ListServices 获取服务列表
+func (s *App) ListServices(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger.Info(ctx, "Listing services")
+
+	services, err := s.Service.ListServices(ctx)
+	if err != nil {
+		logger.Error(ctx, "Failed to list services", "error", err)
+		apiResponse(w, -1, "failed to list services", err.Error())
+		return
+	}
+
+	logger.Info(ctx, "Services listed successfully", "count", len(services))
+	apiResponse(w, 0, "ok", map[string]interface{}{
+		"services": services,
+		"count":    len(services),
+	})
+}

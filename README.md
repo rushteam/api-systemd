@@ -33,6 +33,7 @@
 
 ### 服务管理
 ```
+GET    /services                          # 获取服务列表
 POST   /services/deploy                   # 部署新服务
 GET    /services/{serviceName}/status     # 获取服务状态
 GET    /services/{serviceName}/logs       # 获取服务日志 (?lines=100)
@@ -291,6 +292,10 @@ curl -X POST http://localhost:8080/services/deploy \
 
 #### 管理服务
 ```bash
+# 获取服务列表
+curl http://localhost:8080/services \
+  -H "Authorization: Bearer your-secret-api-key"
+
 # 启动服务
 curl -X POST http://localhost:8080/services/test-app/start \
   -H "Authorization: Bearer your-secret-api-key"

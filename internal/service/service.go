@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,6 +37,8 @@ type Service interface {
 	GetStatus(ctx context.Context, serviceName string) (*systemd.Unit, error)
 	// GetLogs 获取服务日志
 	GetLogs(ctx context.Context, serviceName string, lines int) ([]logs.LogEntry, error)
+	// ListServices 获取服务列表
+	ListServices(ctx context.Context) ([]ServiceInfo, error)
 }
 
 type service struct {
@@ -59,6 +62,15 @@ type DeployRequest struct {
 	Config        *hooks.ServiceConfig      `json:"config,omitempty"`        // 服务配置
 	Hooks         []hooks.Hook              `json:"hooks,omitempty"`         // 生命周期钩子
 	Notifications *hooks.NotificationConfig `json:"notifications,omitempty"` // 通知配置
+}
+
+// ServiceInfo 服务信息
+type ServiceInfo struct {
+	Name        string `json:"name"`        // 服务名称
+	Status      string `json:"status"`      // 服务状态
+	Description string `json:"description"` // 服务描述
+	Path        string `json:"path"`        // 服务路径
+	Enabled     bool   `json:"enabled"`     // 是否启用
 }
 
 // Deploy 部署服务（统一的增强版本）
@@ -399,4 +411,83 @@ func (s *service) sendCallbackNotification(ctx context.Context, serviceName, eve
 	} else {
 		logger.Warn(ctx, "Callback returned non-success status", "status", resp.StatusCode, "service", serviceName)
 	}
+}
+
+// ListServices 获取服务列表（过滤掉系统服务，只显示通过API部署的服务）
+func (s *service) ListServices(ctx context.Context) ([]ServiceInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	logger.Info(ctx, "Listing services")
+
+	// 通过systemd D-Bus获取所有服务单元
+	units, err := systemd.ListUnits(ctx)
+	if err != nil {
+		logger.Error(ctx, "Failed to list systemd units", "error", err)
+		return nil, fmt.Errorf("failed to list systemd units: %w", err)
+	}
+
+	var services []ServiceInfo
+
+	// 过滤出通过API部署的服务（通常在/etc/systemd/system/目录下，且不是系统内置服务）
+	for _, unit := range units {
+		// 只处理.service类型的单元
+		if !strings.HasSuffix(unit.Name, ".service") {
+			continue
+		}
+
+		// 过滤掉系统服务，只保留用户部署的服务
+		if isSystemService(unit.Name) {
+			continue
+		}
+
+		// 检查服务文件是否在我们管理的目录中
+		serviceName := strings.TrimSuffix(unit.Name, ".service")
+		serviceFile := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
+
+		// 检查文件是否存在且可读
+		if _, err := os.Stat(serviceFile); os.IsNotExist(err) {
+			continue
+		}
+
+		// 获取服务详细信息
+		serviceInfo := ServiceInfo{
+			Name:        serviceName,
+			Status:      unit.ActiveState,
+			Description: unit.Description,
+			Path:        serviceFile,
+			Enabled:     unit.UnitFileState == "enabled",
+		}
+
+		services = append(services, serviceInfo)
+	}
+
+	logger.Info(ctx, "Services filtered successfully", "total_units", len(units), "filtered_services", len(services))
+	return services, nil
+}
+
+// isSystemService 判断是否为系统服务
+func isSystemService(serviceName string) bool {
+	// 系统内置服务列表（常见的系统服务）
+	systemServices := []string{
+		"systemd-", "dbus", "NetworkManager", "sshd", "chronyd", "rsyslog",
+		"firewalld", "auditd", "crond", "atd", "cups", "avahi-daemon",
+		"bluetooth", "wpa_supplicant", "ModemManager", "accounts-daemon",
+		"polkit", "udisks2", "colord", "rtkit-daemon", "upower",
+		"gdm", "lightdm", "sddm", "getty@", "user@", "session-",
+		"NetworkManager-", "systemd", "kernel", "kthread", "migration",
+		"rcu_", "watchdog", "ksoftirqd", "systemd-resolved", "systemd-networkd",
+		"systemd-timesyncd", "systemd-logind", "systemd-machined", "systemd-importd",
+		"systemd-hostnamed", "systemd-localed", "systemd-timedated",
+		"api-systemd", // 排除自己
+	}
+
+	// 检查是否匹配系统服务前缀
+	for _, prefix := range systemServices {
+		if strings.HasPrefix(serviceName, prefix) {
+			return true
+		}
+	}
+
+	return false
 }

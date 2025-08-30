@@ -1,6 +1,7 @@
 package systemd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/godbus/dbus"
@@ -201,4 +202,54 @@ func CheckSystemdAvailable() error {
 	}
 
 	return nil
+}
+
+// ListUnits 获取所有systemd单元列表
+func ListUnits(ctx context.Context) ([]*Unit, error) {
+	conn, err := dbus.SystemBus()
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to system bus: %w", err)
+	}
+	defer conn.Close()
+
+	// 调用ListUnits方法获取所有单元
+	obj := conn.Object(destBus, objectPath)
+	call := obj.Call(mngerMethod+".ListUnits", 0)
+	if call.Err != nil {
+		return nil, fmt.Errorf("failed to list units: %w", call.Err)
+	}
+
+	// 解析返回的单元数据
+	var unitData [][]interface{}
+	if err := call.Store(&unitData); err != nil {
+		return nil, fmt.Errorf("failed to parse unit data: %w", err)
+	}
+
+	var units []*Unit
+	for _, data := range unitData {
+		if len(data) < 7 {
+			continue // 跳过格式不正确的数据
+		}
+
+		unit := &Unit{
+			Name:          getString(data[0]),
+			Description:   getString(data[1]),
+			LoadState:     getString(data[2]),
+			ActiveState:   getString(data[3]),
+			SubState:      getString(data[4]),
+			UnitFileState: getString(data[6]),
+		}
+
+		units = append(units, unit)
+	}
+
+	return units, nil
+}
+
+// getString 安全地从interface{}转换为string
+func getString(v interface{}) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
