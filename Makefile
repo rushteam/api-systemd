@@ -78,6 +78,7 @@ deps:
 	@echo "安装依赖..."
 	go mod download
 	go mod tidy
+	@echo "依赖安装完成，包括 chi/v5 路由框架"
 
 # 安装到 systemd
 install: build-local

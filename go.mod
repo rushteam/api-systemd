@@ -3,6 +3,7 @@ module api-systemd
 go 1.22.2
 
 require (
+	github.com/go-chi/chi/v5 v5.0.11
 	github.com/godbus/dbus v4.1.0+incompatible
 	go.opentelemetry.io/otel v1.21.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0

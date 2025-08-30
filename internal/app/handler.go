@@ -11,6 +11,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type App struct {
@@ -21,6 +23,16 @@ func New() *App {
 	return &App{
 		Service: service.NewService(),
 	}
+}
+
+// getServiceName 获取服务名称（支持URL参数和查询参数）
+func getServiceName(r *http.Request) string {
+	// 首先尝试从URL路径参数获取
+	if serviceName := chi.URLParam(r, "serviceName"); serviceName != "" {
+		return serviceName
+	}
+	// 然后从查询参数获取
+	return r.URL.Query().Get("service")
 }
 
 // 启动 Systemd 服务
@@ -121,7 +133,7 @@ func (s *App) DeleteConfig(w http.ResponseWriter, r *http.Request) {
 // GetStatus 获取服务状态接口
 func (s *App) GetStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	serviceName := r.URL.Query().Get("service")
+	serviceName := getServiceName(r)
 
 	if err := validator.ValidateServiceName(serviceName); err != nil {
 		logger.Error(ctx, "GetStatus validation failed", "error", err, "service", serviceName)
@@ -145,7 +157,7 @@ func (s *App) GetStatus(w http.ResponseWriter, r *http.Request) {
 // Stop 停止服务接口
 func (s *App) Stop(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	serviceName := r.URL.Query().Get("service")
+	serviceName := getServiceName(r)
 
 	if err := validator.ValidateServiceName(serviceName); err != nil {
 		logger.Error(ctx, "Stop validation failed", "error", err, "service", serviceName)
@@ -168,7 +180,7 @@ func (s *App) Stop(w http.ResponseWriter, r *http.Request) {
 // Remove 移除服务接口
 func (s *App) Remove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	serviceName := r.URL.Query().Get("service")
+	serviceName := getServiceName(r)
 
 	if err := validator.ValidateServiceName(serviceName); err != nil {
 		logger.Error(ctx, "Remove validation failed", "error", err, "service", serviceName)
@@ -191,7 +203,7 @@ func (s *App) Remove(w http.ResponseWriter, r *http.Request) {
 // Restart 重启服务接口
 func (s *App) Restart(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	serviceName := r.URL.Query().Get("service")
+	serviceName := getServiceName(r)
 
 	if err := validator.ValidateServiceName(serviceName); err != nil {
 		logger.Error(ctx, "Restart validation failed", "error", err, "service", serviceName)
@@ -214,7 +226,7 @@ func (s *App) Restart(w http.ResponseWriter, r *http.Request) {
 // GetLogs 获取服务日志接口
 func (s *App) GetLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	serviceName := r.URL.Query().Get("service")
+	serviceName := getServiceName(r)
 	linesStr := r.URL.Query().Get("lines")
 
 	if err := validator.ValidateServiceName(serviceName); err != nil {

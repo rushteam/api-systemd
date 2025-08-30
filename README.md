@@ -19,22 +19,40 @@
 
 ### 系统特性
 - **D-Bus 集成**: 直接与 systemd 通信，无需 shell 调用
+- **Chi 路由框架**: 高性能、轻量级的 HTTP 路由器
+- **RESTful API**: 支持路径参数和查询参数的灵活路由
+- **中间件生态**: 请求ID、恢复、日志、CORS、超时、压缩等
+- **API 版本化**: 支持多版本API共存
 - **结构化日志**: 使用 slog 提供详细的操作日志
-- **中间件支持**: 恢复、日志、CORS 中间件
 - **优雅关闭**: 支持信号处理和优雅停机
 - **健康检查**: 内置系统健康状态检查
+- **性能分析**: 内置 pprof 调试工具
 
 ## 📡 API 接口
 
-### 服务管理
+### 服务管理 (RESTful)
 ```
-POST   /services/deploy    # 部署服务
-GET    /services/start     # 启动服务
-GET    /services/stop      # 停止服务
-GET    /services/restart   # 重启服务
-GET    /services/remove    # 移除服务
-GET    /services/status    # 获取服务状态
-GET    /services/logs      # 获取服务日志
+POST   /services/deploy           # 部署服务
+GET    /services/start            # 启动服务 (?service=name)
+GET    /services/stop             # 停止服务 (?service=name)
+GET    /services/restart          # 重启服务 (?service=name)
+DELETE /services/remove           # 移除服务 (?service=name)
+GET    /services/status           # 获取服务状态 (?service=name)
+GET    /services/logs             # 获取服务日志 (?service=name&lines=100)
+
+# 或使用路径参数
+GET    /services/{serviceName}/status    # 获取指定服务状态
+GET    /services/{serviceName}/logs      # 获取指定服务日志
+POST   /services/{serviceName}/start     # 启动指定服务
+POST   /services/{serviceName}/stop      # 停止指定服务
+POST   /services/{serviceName}/restart   # 重启指定服务
+DELETE /services/{serviceName}           # 删除指定服务
+```
+
+### API 版本化 (推荐)
+```
+POST   /api/v1/services/deploy           # v1 版本API
+GET    /api/v1/services/{serviceName}/status
 ```
 
 ### 配置管理
@@ -46,6 +64,8 @@ DELETE /configs/delete     # 删除配置文件
 ### 系统监控
 ```
 GET    /health            # 健康检查
+GET    /ping              # 简单连通性测试
+GET    /debug/            # 性能分析工具 (开发环境)
 ```
 
 ## 🛠️ 部署请求格式
