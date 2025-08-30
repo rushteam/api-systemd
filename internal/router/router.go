@@ -2,6 +2,8 @@ package router
 
 import (
 	"api-systemd/internal/app"
+	authMiddleware "api-systemd/internal/middleware"
+	"api-systemd/internal/pkg/config"
 	"api-systemd/internal/pkg/logger"
 	"net/http"
 	"time"
@@ -11,7 +13,7 @@ import (
 )
 
 // New 创建新的路由器
-func New() *chi.Mux {
+func New(cfg *config.Config) *chi.Mux {
 	r := chi.NewRouter()
 
 	// 全局中间件
@@ -22,6 +24,9 @@ func New() *chi.Mux {
 	r.Use(customCORS)
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(middleware.Compress(5))
+
+	// 认证中间件
+	r.Use(authMiddleware.BearerTokenAuth(cfg))
 
 	// 创建应用实例
 	app := app.New()

@@ -21,8 +21,9 @@
 - **D-Bus 集成**: 直接与 systemd 通信，无需 shell 调用
 - **Chi 路由框架**: 高性能、轻量级的 HTTP 路由器
 - **RESTful API**: 支持路径参数和查询参数的灵活路由
-- **中间件生态**: 请求ID、恢复、日志、CORS、超时、压缩等
-- **API 版本化**: 支持多版本API共存
+- **强制认证**: 自动生成临时密钥或使用配置的API Key
+- **Bearer Token 认证**: 安全的API访问控制
+- **中间件生态**: 请求ID、认证、恢复、日志、CORS、超时、压缩等
 - **结构化日志**: 使用 slog 提供详细的操作日志
 - **优雅关闭**: 支持信号处理和优雅停机
 - **健康检查**: 内置系统健康状态检查
@@ -199,10 +200,18 @@ api-systemd-ctl health
 #### 3. 配置文件
 服务配置文件位于：`/etc/api-systemd/config.env`
 ```bash
+# 服务器配置
 SERVER_PORT=:8080
-SERVER_READ_TIMEOUT=30s
-SERVER_WRITE_TIMEOUT=30s
+READ_TIMEOUT=30s
+WRITE_TIMEOUT=30s
+SHUTDOWN_TIMEOUT=10s
+
+# 安全配置
+# API_KEY=your-secret-api-key-change-this-in-production  # 如果不设置，启动时会生成临时密钥
+
+# 日志配置
 LOG_LEVEL=info
+LOG_FORMAT=json
 ```
 
 #### 4. 卸载服务
@@ -222,6 +231,14 @@ go build -o api-systemd
 #### 运行
 ```bash
 ./api-systemd
+```
+
+**首次启动时，如果未设置 `API_KEY`，系统会自动生成临时密钥并在控制台显示：**
+```
+🔑 API_KEY 未设置，已生成临时密钥:
+   API_KEY: tmp-a1b2c3d4e5f6...
+   请使用此密钥进行API认证: Authorization: Bearer tmp-a1b2c3d4e5f6...
+   建议在生产环境中设置固定的 API_KEY 环境变量
 ```
 
 ### 方式三：Docker 部署
@@ -257,10 +274,13 @@ make health
 
 ### API 使用示例
 
+> **注意**: 所有API请求都需要包含 Bearer Token（强制认证）
+
 #### 部署服务
 ```bash
 curl -X POST http://localhost:8080/services/deploy \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-api-key" \
   -d '{
     "service": "test-app",
     "path": "/opt/services",
@@ -272,22 +292,28 @@ curl -X POST http://localhost:8080/services/deploy \
 #### 管理服务
 ```bash
 # 启动服务
-curl -X POST http://localhost:8080/services/test-app/start
+curl -X POST http://localhost:8080/services/test-app/start \
+  -H "Authorization: Bearer your-secret-api-key"
 
 # 获取服务状态
-curl http://localhost:8080/services/test-app/status
+curl http://localhost:8080/services/test-app/status \
+  -H "Authorization: Bearer your-secret-api-key"
 
 # 获取服务日志（最近100行）
-curl http://localhost:8080/services/test-app/logs?lines=100
+curl http://localhost:8080/services/test-app/logs?lines=100 \
+  -H "Authorization: Bearer your-secret-api-key"
 
 # 重启服务
-curl -X POST http://localhost:8080/services/test-app/restart
+curl -X POST http://localhost:8080/services/test-app/restart \
+  -H "Authorization: Bearer your-secret-api-key"
 
 # 停止服务
-curl -X POST http://localhost:8080/services/test-app/stop
+curl -X POST http://localhost:8080/services/test-app/stop \
+  -H "Authorization: Bearer your-secret-api-key"
 
 # 删除服务
-curl -X DELETE http://localhost:8080/services/test-app
+curl -X DELETE http://localhost:8080/services/test-app \
+  -H "Authorization: Bearer your-secret-api-key"
 ```
 
 #### 配置管理
@@ -295,13 +321,24 @@ curl -X DELETE http://localhost:8080/services/test-app
 # 创建配置
 curl -X POST http://localhost:8080/configs/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-api-key" \
   -d '{
     "service": "test-app",
     "config": "[Unit]\nDescription=Test App\n[Service]\nExecStart=/opt/test-app/app\n[Install]\nWantedBy=multi-user.target"
   }'
 
 # 删除配置
-curl -X DELETE http://localhost:8080/configs/test-app
+curl -X DELETE http://localhost:8080/configs/test-app \
+  -H "Authorization: Bearer your-secret-api-key"
+```
+
+#### 无需认证的接口
+```bash
+# 健康检查（无需认证）
+curl http://localhost:8080/health
+
+# 连通性测试（无需认证）
+curl http://localhost:8080/ping
 ```
 
 ## 🔧 开发

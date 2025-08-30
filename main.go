@@ -30,10 +30,10 @@ func main() {
 	}
 
 	ctx := context.Background()
-	logger.Info(ctx, "Starting API-Systemd server", "port", serverPort, "config", cfg)
+	logger.Info(ctx, "Starting API-Systemd server", "port", serverPort, "api_key_configured", cfg.Security.APIKey != "")
 
 	// 创建路由器
-	r := router.New()
+	r := router.New(cfg)
 
 	// 创建HTTP服务器
 	server := &http.Server{

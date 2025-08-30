@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -39,6 +42,17 @@ type LoggingConfig struct {
 
 // Load 加载配置
 func Load() *Config {
+	apiKey := getEnv("API_KEY", "")
+
+	// 如果API_KEY为空，生成临时的
+	if apiKey == "" {
+		apiKey = generateTempAPIKey()
+		fmt.Printf("\n🔑 API_KEY 未设置，已生成临时密钥:\n")
+		fmt.Printf("   API_KEY: %s\n", apiKey)
+		fmt.Printf("   请使用此密钥进行API认证: Authorization: Bearer %s\n", apiKey)
+		fmt.Printf("   建议在生产环境中设置固定的 API_KEY 环境变量\n\n")
+	}
+
 	return &Config{
 		Server: ServerConfig{
 			Port:            getEnv("SERVER_PORT", ":8080"),
@@ -47,8 +61,8 @@ func Load() *Config {
 			ShutdownTimeout: getDurationEnv("SHUTDOWN_TIMEOUT", 10*time.Second),
 		},
 		Security: SecurityConfig{
-			EnableAuth:    getBoolEnv("ENABLE_AUTH", false),
-			APIKey:        getEnv("API_KEY", ""),
+			EnableAuth:    true, // 强制启用认证
+			APIKey:        apiKey,
 			AllowedHosts:  getStringSliceEnv("ALLOWED_HOSTS", []string{"*"}),
 			RateLimitRPS:  getIntEnv("RATE_LIMIT_RPS", 100),
 			MaxUploadSize: getInt64Env("MAX_UPLOAD_SIZE", 100*1024*1024), // 100MB
@@ -116,4 +130,17 @@ func getStringSliceEnv(key string, defaultValue []string) []string {
 		return []string{value}
 	}
 	return defaultValue
+}
+
+// generateTempAPIKey 生成临时API密钥
+func generateTempAPIKey() string {
+	// 生成32字节的随机数据
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		// 如果随机数生成失败，使用时间戳作为后备方案
+		return fmt.Sprintf("tmp-api-key-%d", time.Now().Unix())
+	}
+
+	// 转换为十六进制字符串
+	return "tmp-" + hex.EncodeToString(bytes)
 }
