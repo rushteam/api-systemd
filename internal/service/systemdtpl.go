@@ -10,8 +10,8 @@ import (
 	"api-systemd/internal/pkg/hooks"
 )
 
-// Define the enhanced systemd template
-const enhancedSystemdTpl = `[Unit]
+// 统一的 systemd 模板，支持简单和复杂配置
+const systemdTpl = `[Unit]
 Description={{.Description}}
 {{- if .After}}
 After={{join .After " "}}
@@ -82,15 +82,8 @@ TasksMax={{.TasksMax}}
 WantedBy=multi-user.target
 `
 
-// Struct to hold the template data (legacy)
+// SystemdConfig 统一的 systemd 配置结构
 type SystemdConfig struct {
-	ServiceName      string
-	WorkingDirectory string
-	ExecStart        string
-}
-
-// EnhancedSystemdConfig 增强的systemd配置
-type EnhancedSystemdConfig struct {
 	*hooks.ServiceConfig
 	PreStartHooks        []string
 	PostStartHooks       []string
@@ -99,22 +92,32 @@ type EnhancedSystemdConfig struct {
 	RestartDelaySecValue int
 }
 
-func NewSystemdConfig(serviceName, workingDirectory, startCmd string) *SystemdConfig {
-	return &SystemdConfig{
-		ServiceName:      serviceName,
-		WorkingDirectory: workingDirectory,
-		ExecStart:        filepath.Join(workingDirectory, startCmd),
-	}
-}
+// NewSystemdConfig 创建 systemd 配置
+// 如果传入完整的 ServiceConfig，则使用增强配置
+// 如果传入简单参数，则创建基本配置
+func NewSystemdConfig(serviceName, workingDirectory, startCmd string, serviceConfig ...*hooks.ServiceConfig) *SystemdConfig {
+	var config *hooks.ServiceConfig
 
-// NewEnhancedSystemdConfig 创建增强的systemd配置
-func NewEnhancedSystemdConfig(config *hooks.ServiceConfig) *EnhancedSystemdConfig {
-	enhanced := &EnhancedSystemdConfig{
+	if len(serviceConfig) > 0 && serviceConfig[0] != nil {
+		// 使用传入的增强配置
+		config = serviceConfig[0]
+	} else {
+		// 创建基本配置
+		config = &hooks.ServiceConfig{
+			ServiceName:      serviceName,
+			Description:      fmt.Sprintf("%s Service", serviceName),
+			WorkingDirectory: workingDirectory,
+			ExecStart:        filepath.Join(workingDirectory, startCmd),
+			RestartPolicy:    "always",
+		}
+	}
+
+	systemdConfig := &SystemdConfig{
 		ServiceConfig:        config,
 		RestartDelaySecValue: int(config.RestartDelaySec.Seconds()),
 	}
 
-	// 从钩子中提取systemd原生命令
+	// 从钩子中提取 systemd 原生命令
 	for _, hook := range config.Hooks {
 		if hook.Command == "" {
 			continue
@@ -122,39 +125,26 @@ func NewEnhancedSystemdConfig(config *hooks.ServiceConfig) *EnhancedSystemdConfi
 
 		switch hook.Type {
 		case hooks.HookPreStart:
-			enhanced.PreStartHooks = append(enhanced.PreStartHooks, hook.Command)
+			systemdConfig.PreStartHooks = append(systemdConfig.PreStartHooks, hook.Command)
 		case hooks.HookPostStart:
-			enhanced.PostStartHooks = append(enhanced.PostStartHooks, hook.Command)
+			systemdConfig.PostStartHooks = append(systemdConfig.PostStartHooks, hook.Command)
 		case hooks.HookPreStop:
-			enhanced.PreStopHooks = append(enhanced.PreStopHooks, hook.Command)
+			systemdConfig.PreStopHooks = append(systemdConfig.PreStopHooks, hook.Command)
 		case hooks.HookPostStop:
-			enhanced.PostStopHooks = append(enhanced.PostStopHooks, hook.Command)
+			systemdConfig.PostStopHooks = append(systemdConfig.PostStopHooks, hook.Command)
 		}
 	}
 
-	return enhanced
+	return systemdConfig
 }
 
-func (s *SystemdConfig) WriteFile(filename string) error {
-	tmpl, err := template.New("systemd").Parse(systemdTpl)
-	if err != nil {
-		return err
-	}
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	return tmpl.Execute(file, s)
-}
-
-// WriteFile 写入增强的systemd配置文件
-func (esc *EnhancedSystemdConfig) WriteFile(filename string) error {
+// WriteFile 写入 systemd 配置文件
+func (sc *SystemdConfig) WriteFile(filename string) error {
 	funcMap := template.FuncMap{
 		"join": strings.Join,
 	}
 
-	tmpl, err := template.New("systemd").Funcs(funcMap).Parse(enhancedSystemdTpl)
+	tmpl, err := template.New("systemd").Funcs(funcMap).Parse(systemdTpl)
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
 	}
@@ -165,18 +155,5 @@ func (esc *EnhancedSystemdConfig) WriteFile(filename string) error {
 	}
 	defer file.Close()
 
-	return tmpl.Execute(file, esc)
+	return tmpl.Execute(file, sc)
 }
-
-// 保持向后兼容的简单模板
-const systemdTpl = `[Unit]
-Description={{.ServiceName}} Service
-
-[Service]
-WorkingDirectory={{.WorkingDirectory}}
-ExecStart={{.ExecStart}}
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-`

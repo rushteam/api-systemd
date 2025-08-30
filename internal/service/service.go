@@ -159,20 +159,11 @@ func (s *service) Deploy(ctx context.Context, params *DeployRequest) error {
 
 	// 写入systemd配置
 	systemdFile := fmt.Sprintf("/etc/systemd/system/%s.service", params.Service)
-	if config.Hooks != nil && len(config.Hooks) > 0 {
-		// 使用增强配置
-		enhancedConfig := NewEnhancedSystemdConfig(config)
-		if err := enhancedConfig.WriteFile(systemdFile); err != nil {
-			logger.Error(ctx, "Failed to write systemd config", "error", err, "file", systemdFile)
-			return fmt.Errorf("failed to write systemd config: %w", err)
-		}
-	} else {
-		// 使用简单配置
-		simpleConfig := NewSystemdConfig(params.Service, config.WorkingDirectory, params.StartCommand)
-		if err := simpleConfig.WriteFile(systemdFile); err != nil {
-			logger.Error(ctx, "Failed to write systemd config", "error", err, "file", systemdFile)
-			return fmt.Errorf("failed to write systemd config: %w", err)
-		}
+	systemdConfig := NewSystemdConfig(params.Service, config.WorkingDirectory, params.StartCommand, config)
+
+	if err := systemdConfig.WriteFile(systemdFile); err != nil {
+		logger.Error(ctx, "Failed to write systemd config", "error", err, "file", systemdFile)
+		return fmt.Errorf("failed to write systemd config: %w", err)
 	}
 
 	logger.Info(ctx, "Creating systemd config", "service", params.Service, "path", config.WorkingDirectory)

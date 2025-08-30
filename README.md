@@ -160,22 +160,96 @@ LOG_LEVEL=info
 
 ## 🚀 快速开始
 
-### 构建
+### 方式一：作为 systemd 服务安装（推荐）
+
+#### 1. 构建和安装
 ```bash
+# 构建项目
+make build-local
+
+# 安装到 systemd（需要 root 权限）
+make install
+```
+
+#### 2. 服务管理
+```bash
+# 查看服务状态
+systemctl status api-systemd
+
+# 启动/停止/重启服务
+systemctl start api-systemd
+systemctl stop api-systemd
+systemctl restart api-systemd
+
+# 查看服务日志
+journalctl -u api-systemd -f
+
+# 或使用便捷命令
+api-systemd-ctl status
+api-systemd-ctl logs
+api-systemd-ctl health
+```
+
+#### 3. 配置文件
+服务配置文件位于：`/etc/api-systemd/config.env`
+```bash
+SERVER_PORT=:8080
+SERVER_READ_TIMEOUT=30s
+SERVER_WRITE_TIMEOUT=30s
+LOG_LEVEL=info
+```
+
+#### 4. 卸载服务
+```bash
+make uninstall
+```
+
+### 方式二：直接运行
+
+#### 构建
+```bash
+make build-local
+# 或
 go build -o api-systemd
 ```
 
-### 运行
+#### 运行
 ```bash
 ./api-systemd
+```
+
+### 方式三：Docker 部署
+
+#### 使用 Docker
+```bash
+# 构建镜像
+make docker
+
+# 运行容器
+docker run -d \
+  --name api-systemd \
+  -p 8080:8080 \
+  -v /var/log/api-systemd:/var/log/api-systemd \
+  api-systemd:latest
+```
+
+#### 使用 Docker Compose
+```bash
+# 启动所有服务（包括监控）
+docker-compose up -d
+
+# 仅启动 API 服务
+docker-compose up -d api-systemd
 ```
 
 ### 健康检查
 ```bash
 curl http://localhost:8080/health
+# 或
+make health
 ```
 
-### 部署服务
+### 部署服务示例
 ```bash
 curl -X POST http://localhost:8080/services/deploy \
   -H "Content-Type: application/json" \
@@ -205,6 +279,79 @@ golangci-lint run
 - Go 1.22+
 - Linux 系统 (systemd)
 - 足够的权限操作 systemd 服务
+
+## 🔐 安全特性
+
+### systemd 安全配置
+- **用户隔离**: 运行在专用的 `api-systemd` 用户下
+- **权限限制**: 使用最小权限原则
+- **文件系统保护**: 只读系统文件，受限的写入路径
+- **进程隔离**: 私有临时目录和进程命名空间
+
+### 服务安全
+- **输入验证**: 严格的参数验证
+- **资源限制**: 可配置的内存和CPU限制
+- **日志审计**: 详细的操作日志记录
+- **权限检查**: systemd 操作权限验证
+
+## 📁 目录结构
+
+### systemd 安装后的目录结构
+```
+/opt/api-systemd/              # 主安装目录
+├── api-systemd                # 主程序
+└── manage.sh                  # 管理脚本
+
+/etc/api-systemd/              # 配置目录
+└── config.env                 # 主配置文件
+
+/var/log/api-systemd/          # 日志目录
+
+/etc/systemd/system/           # systemd 配置
+└── api-systemd.service        # 服务定义文件
+
+/usr/local/bin/                # 全局命令
+└── api-systemd-ctl            # 管理命令链接
+```
+
+### 配置文件说明
+- **主配置**: `/etc/api-systemd/config.env` - 服务运行配置
+- **systemd配置**: `/etc/systemd/system/api-systemd.service` - 服务定义
+- **日志轮转**: `/etc/logrotate.d/api-systemd` - 日志管理
+
+## 🛠️ 管理命令
+
+### Make 命令
+```bash
+make help          # 显示所有可用命令
+make build          # 构建二进制文件
+make install        # 安装到 systemd
+make uninstall      # 从 systemd 卸载
+make status         # 查看服务状态
+make logs           # 查看服务日志
+make health         # 执行健康检查
+make restart        # 重启服务
+```
+
+### systemctl 命令
+```bash
+systemctl start api-systemd     # 启动服务
+systemctl stop api-systemd      # 停止服务
+systemctl restart api-systemd   # 重启服务
+systemctl status api-systemd    # 查看状态
+systemctl enable api-systemd    # 开机自启
+systemctl disable api-systemd   # 禁用自启
+```
+
+### 便捷管理命令
+```bash
+api-systemd-ctl start       # 启动服务
+api-systemd-ctl stop        # 停止服务
+api-systemd-ctl restart     # 重启服务
+api-systemd-ctl status      # 查看状态
+api-systemd-ctl logs        # 查看日志
+api-systemd-ctl health      # 健康检查
+```
 
 ## 🤝 贡献
 
