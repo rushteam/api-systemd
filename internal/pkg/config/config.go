@@ -11,9 +11,10 @@ import (
 
 // Config 应用配置
 type Config struct {
-	Server   ServerConfig   `json:"server"`
-	Security SecurityConfig `json:"security"`
-	Logging  LoggingConfig  `json:"logging"`
+	Server    ServerConfig    `json:"server"`
+	Security  SecurityConfig  `json:"security"`
+	Logging   LoggingConfig   `json:"logging"`
+	Workspace WorkspaceConfig `json:"workspace"`
 }
 
 // ServerConfig 服务器配置
@@ -38,6 +39,11 @@ type LoggingConfig struct {
 	Level      string `json:"level"`
 	Format     string `json:"format"`
 	OutputFile string `json:"output_file"`
+}
+
+// WorkspaceConfig 工作空间配置
+type WorkspaceConfig struct {
+	WorkDir string `json:"work_dir"` // 工作目录根路径
 }
 
 // Load 加载配置
@@ -71,6 +77,9 @@ func Load() *Config {
 			Level:      getEnv("LOG_LEVEL", "info"),
 			Format:     getEnv("LOG_FORMAT", "json"),
 			OutputFile: getEnv("LOG_OUTPUT_FILE", ""),
+		},
+		Workspace: WorkspaceConfig{
+			WorkDir: getEnv("WORK_DIR", "/opt/api-systemd"),
 		},
 	}
 }

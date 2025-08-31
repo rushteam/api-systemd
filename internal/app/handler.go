@@ -1,6 +1,7 @@
 package app
 
 import (
+	"api-systemd/internal/pkg/config"
 	"api-systemd/internal/pkg/logger"
 	"api-systemd/internal/pkg/systemd"
 	"api-systemd/internal/pkg/validator"
@@ -19,9 +20,9 @@ type App struct {
 	Service service.Service
 }
 
-func New() *App {
+func New(cfg *config.Config) *App {
 	return &App{
-		Service: service.NewService(),
+		Service: service.NewService(cfg.Workspace.WorkDir),
 	}
 }
 

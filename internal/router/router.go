@@ -29,7 +29,7 @@ func New(cfg *config.Config) *chi.Mux {
 	r.Use(authMiddleware.BearerTokenAuth(cfg))
 
 	// 创建应用实例
-	app := app.New()
+	app := app.New(cfg)
 
 	// 设置路由
 	setupRoutes(r, app)

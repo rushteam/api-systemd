@@ -23,6 +23,7 @@
 - **RESTful API**: 支持路径参数和查询参数的灵活路由
 - **强制认证**: 自动生成临时密钥或使用配置的API Key
 - **Bearer Token 认证**: 安全的API访问控制
+- **工作空间管理**: 自动管理服务文件和日志目录
 - **中间件生态**: 请求ID、认证、恢复、日志、CORS、超时、压缩等
 - **结构化日志**: 使用 slog 提供详细的操作日志
 - **优雅关闭**: 支持信号处理和优雅停机
@@ -213,6 +214,9 @@ SHUTDOWN_TIMEOUT=10s
 # 日志配置
 LOG_LEVEL=info
 LOG_FORMAT=json
+
+# 工作空间配置
+WORK_DIR=/opt/api-systemd  # 工作目录根路径
 ```
 
 #### 4. 卸载服务
@@ -385,12 +389,21 @@ golangci-lint run
 ```
 /opt/api-systemd/              # 主安装目录
 ├── api-systemd                # 主程序
-└── manage.sh                  # 管理脚本
+├── manage.sh                  # 管理脚本
+├── services/                  # 服务文件目录
+│   ├── my-app/               # 服务名称目录
+│   │   ├── app               # 应用程序文件
+│   │   └── config.json       # 应用配置文件
+│   └── worker/               # 另一个服务
+│       └── worker            # 工作进程文件
+└── logs/                     # 日志目录
+    ├── my-app/               # 服务日志目录
+    └── worker/               # 工作进程日志目录
 
 /etc/api-systemd/              # 配置目录
 └── config.env                 # 主配置文件
 
-/var/log/api-systemd/          # 日志目录
+/var/log/api-systemd/          # 系统日志目录
 
 /etc/systemd/system/           # systemd 配置
 └── api-systemd.service        # 服务定义文件

@@ -9,6 +9,7 @@ import (
 	"api-systemd/internal/pkg/systemd"
 	"api-systemd/internal/pkg/telemetry"
 	"api-systemd/internal/pkg/validator"
+	"api-systemd/internal/pkg/workspace"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -45,11 +46,21 @@ type service struct {
 	mu           sync.RWMutex // 添加读写锁以支持并发控制
 	hookExecutor hooks.HookExecutorInterface
 	otelReporter *telemetry.OTELReporter
+	workspaceMgr *workspace.Manager
 }
 
-func NewService() Service {
+func NewService(workDir string) Service {
+	workspaceMgr := workspace.NewManager(workDir)
+
+	// 初始化工作空间
+	if err := workspaceMgr.InitWorkspace(); err != nil {
+		// 记录错误但不阻止服务启动
+		fmt.Printf("Warning: failed to initialize workspace: %v\n", err)
+	}
+
 	return &service{
 		hookExecutor: hooks.NewHookExecutor(),
+		workspaceMgr: workspaceMgr,
 	}
 }
 
@@ -86,6 +97,24 @@ func (s *service) Deploy(ctx context.Context, params *DeployRequest) error {
 	defer s.mu.Unlock()
 
 	logger.Info(ctx, "Starting deployment", "service", params.Service, "url", params.PackageURL)
+
+	// 创建服务和日志目录
+	serviceDir, err := s.workspaceMgr.EnsureServiceDir(params.Service)
+	if err != nil {
+		logger.Error(ctx, "Failed to create service directory", "error", err, "service", params.Service)
+		return fmt.Errorf("failed to create service directory: %w", err)
+	}
+
+	logDir, err := s.workspaceMgr.EnsureLogDir(params.Service)
+	if err != nil {
+		logger.Error(ctx, "Failed to create log directory", "error", err, "service", params.Service)
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	logger.Info(ctx, "Created service directories",
+		"service", params.Service,
+		"serviceDir", serviceDir,
+		"logDir", logDir)
 
 	// 初始化OTEL报告器（如果配置了）
 	if params.Notifications != nil && params.Notifications.OTEL != nil && params.Notifications.OTEL.Enabled {
@@ -131,7 +160,7 @@ func (s *service) Deploy(ctx context.Context, params *DeployRequest) error {
 		}
 	}()
 
-	folders, err := extract.Extract(tempFile, params.Path)
+	folders, err := extract.Extract(tempFile, serviceDir)
 	if err != nil {
 		logger.Error(ctx, "Failed to extract file", "error", err, "file", tempFile)
 		return fmt.Errorf("failed to extract file: %w", err)
@@ -151,18 +180,24 @@ func (s *service) Deploy(ctx context.Context, params *DeployRequest) error {
 	if params.Config != nil {
 		config = params.Config
 		config.ServiceName = params.Service
-		config.WorkingDirectory = filepath.Join(params.Path, folder)
-		config.ExecStart = filepath.Join(params.Path, folder, params.StartCommand)
+		config.WorkingDirectory = filepath.Join(serviceDir, folder)
+		config.ExecStart = filepath.Join(serviceDir, folder, params.StartCommand)
 	} else {
 		config = &hooks.ServiceConfig{
 			ServiceName:      params.Service,
 			Description:      fmt.Sprintf("%s Service", params.Service),
-			WorkingDirectory: filepath.Join(params.Path, folder),
-			ExecStart:        filepath.Join(params.Path, folder, params.StartCommand),
+			WorkingDirectory: filepath.Join(serviceDir, folder),
+			ExecStart:        filepath.Join(serviceDir, folder, params.StartCommand),
 			RestartPolicy:    "always",
 			Hooks:            []hooks.Hook{},
 		}
 	}
+
+	// 设置日志目录环境变量
+	if config.Environment == nil {
+		config.Environment = make(map[string]string)
+	}
+	config.Environment["LOG_DIR"] = logDir
 
 	// 合并钩子配置
 	if len(params.Hooks) > 0 {
@@ -218,7 +253,8 @@ func (s *service) Deploy(ctx context.Context, params *DeployRequest) error {
 	if s.otelReporter != nil {
 		s.otelReporter.ReportServiceEvent(ctx, params.Service, "deployed", map[string]interface{}{
 			"package_url": params.PackageURL,
-			"path":        params.Path,
+			"service_dir": serviceDir,
+			"log_dir":     logDir,
 		})
 	}
 
@@ -294,6 +330,14 @@ func (s *service) Remove(ctx context.Context, serviceName string) error {
 	if err != nil {
 		logger.Error(ctx, "Failed to reload systemd daemon", "error", err)
 		return fmt.Errorf("failed to reload systemd daemon: %w", err)
+	}
+
+	// Step 5: Clean up service directories
+	if err := s.workspaceMgr.CleanupService(serviceName); err != nil {
+		logger.Warn(ctx, "Failed to cleanup service directories", "error", err, "service", serviceName)
+		// 不返回错误，因为systemd服务已经成功删除
+	} else {
+		logger.Info(ctx, "Service directories cleaned up", "service", serviceName)
 	}
 
 	logger.Info(ctx, "Service removed successfully", "service", serviceName)
