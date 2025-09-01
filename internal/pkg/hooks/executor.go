@@ -160,13 +160,27 @@ func (he *HookExecutor) executeCallback(ctx context.Context, hook Hook, event *H
 
 // ExecuteHooks 执行多个钩子
 func (he *HookExecutor) ExecuteHooks(ctx context.Context, hooks []Hook, hookType HookType, serviceName string, metadata map[string]interface{}) []*HookEvent {
-	var events []*HookEvent
+	syncHooks := make(chan Hook)
+	syncEvents := make(chan *HookEvent)
+	syncHookCount := 0
+	go func() {
+		// 处理同步执行的hook
+		for hook := range syncHooks {
+			event := he.ExecuteHook(ctx, hook, serviceName, metadata)
+			logger.Info(ctx, "Hook executed",
+				"service", serviceName,
+				"hook_type", string(hookType),
+				"hook_name", hook.Name,
+				"status", event.Status,
+				"duration", event.Duration)
+			syncEvents <- event
+		}
+	}()
 
 	for _, hook := range hooks {
 		if !hook.Enabled || hook.Type != hookType {
 			continue
 		}
-
 		if hook.Async {
 			// 异步执行
 			go func(h Hook) {
@@ -180,17 +194,16 @@ func (he *HookExecutor) ExecuteHooks(ctx context.Context, hooks []Hook, hookType
 			}(hook)
 		} else {
 			// 同步执行
-			event := he.ExecuteHook(ctx, hook, serviceName, metadata)
-			events = append(events, event)
-
-			logger.Info(ctx, "Hook executed",
-				"service", serviceName,
-				"hook_type", string(hookType),
-				"hook_name", hook.Name,
-				"status", event.Status,
-				"duration", event.Duration)
+			syncHookCount++
+			syncHooks <- hook
 		}
 	}
+	close(syncHooks)
 
+	var events []*HookEvent
+	for i := 0; i < syncHookCount; i++ {
+		event := <-syncEvents
+		events = append(events, event)
+	}
 	return events
 }
