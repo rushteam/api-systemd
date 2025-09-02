@@ -1,8 +1,7 @@
 package service
 
 import (
-	download "api-systemd/internal/pkg/donwload"
-	"api-systemd/internal/pkg/extract"
+	"api-systemd/internal/pkg/artifact"
 	"api-systemd/internal/pkg/hooks"
 	"api-systemd/internal/pkg/logger"
 	"api-systemd/internal/pkg/logs"
@@ -47,6 +46,7 @@ type service struct {
 	hookExecutor hooks.HookExecutorInterface
 	otelReporter *telemetry.OTELReporter
 	workspaceMgr *workspace.Manager
+	artifactMgr  *artifact.Manager
 }
 
 func NewService(workDir string) Service {
@@ -61,6 +61,7 @@ func NewService(workDir string) Service {
 	return &service{
 		hookExecutor: hooks.NewHookExecutor(),
 		workspaceMgr: workspaceMgr,
+		artifactMgr:  artifact.NewManager(),
 	}
 }
 
@@ -148,28 +149,21 @@ func (s *service) Deploy(ctx context.Context, params *DeployRequest) error {
 		}
 	}
 
-	// 下载和解压
-	tempFile, err := download.Download(params.PackageURL)
-	if err != nil {
-		logger.Error(ctx, "Failed to download file", "error", err, "url", params.PackageURL)
-		return fmt.Errorf("failed to download file: %w", err)
-	}
-	defer func() {
-		if removeErr := os.Remove(tempFile); removeErr != nil {
-			logger.Warn(ctx, "Failed to remove temp file", "file", tempFile, "error", removeErr)
-		}
-	}()
-
-	folders, err := extract.Extract(tempFile, serviceDir)
-	if err != nil {
-		logger.Error(ctx, "Failed to extract file", "error", err, "file", tempFile)
-		return fmt.Errorf("failed to extract file: %w", err)
+	// 验证URL格式
+	if err := s.artifactMgr.ValidateURL(params.PackageURL); err != nil {
+		logger.Error(ctx, "Invalid package URL", "error", err, "url", params.PackageURL)
+		return fmt.Errorf("invalid package URL: %w", err)
 	}
 
-	var folder string
-	if len(folders) > 0 {
-		folder = folders[0]
+	// 下载并解压产物
+	folders, err := s.artifactMgr.DownloadAndExtract(params.PackageURL, serviceDir)
+	if err != nil {
+		logger.Error(ctx, "Failed to download and extract artifact", "error", err, "url", params.PackageURL)
+		return fmt.Errorf("failed to download and extract artifact: %w", err)
 	}
+
+	// 获取解压后的第一个文件夹
+	folder := s.artifactMgr.GetFirstFolder(folders)
 	if len(folder) == 0 {
 		logger.Error(ctx, "No folders extracted from package")
 		return fmt.Errorf("failed to extract folder name")
